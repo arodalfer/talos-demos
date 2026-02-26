@@ -1,37 +1,37 @@
 #!/bin/bash
 
-# --- 1. CARGAR CONFIGURACIÓN EXTERNA ---
+# --- 1. LOAD EXTERNAL CONFIGURATION ---
 CONFIG_FILE="cluster.env"
 source "$CONFIG_FILE"
-echo "Configuración cargada (Talos $TALOS_VERSION | Red: $BRIDGE_IF | Workers: $WORKER_COUNT)"
+echo "Configuration loaded (Talos $TALOS_VERSION | Network: $BRIDGE_IF | Workers: $WORKER_COUNT)"
 
-# --- 2. VARIABLES INTERNAS ---
+# --- 2. INTERNAL VARIABLES ---
 CLUSTER_NAME="talos-vbox-demo"
 ISO_NAME="metal-amd64.iso"
 ISO_URL="https://github.com/siderolabs/talos/releases/download/${TALOS_VERSION}/${ISO_NAME}"
 
-# --- 3. DESCARGA DE LA ISO ---
+# --- 3. DOWNLOAD THE ISO ---
 if [ ! -f "$ISO_NAME" ]; then
-    echo "Descargando ISO de Talos..."
+    echo "Downloading Talos ISO..."
     if ! curl -Lo "$ISO_NAME" "$ISO_URL"; then
-        echo "Error al descargar la ISO."
+        echo "Error downloading the ISO."
         exit 1
     fi
 else
-    echo "ISO encontrada localmente."
+    echo "ISO found locally."
 fi
 
-# --- 4. FUNCIÓN PARA CREAR MÁQUINAS ---
-crear_vm() {
+# --- 4. FUNCTION TO CREATE VMs ---
+create_vm() {
     local VM_NAME="$1"
     local RAM="$2"
 
     if VBoxManage showvminfo "$VM_NAME" &> /dev/null; then
-        echo "La máquina '$VM_NAME' ya existe. Omitiendo creación..."
+        echo "VM '$VM_NAME' already exists. Skipping creation..."
         return
     fi
 
-    echo "Creando: $VM_NAME (${RAM}MB RAM, 10GB Disco, Bridge)..."
+    echo "Creating: $VM_NAME (${RAM}MB RAM, 10GB Disk, Bridge)..."
     
     VBoxManage createvm --name "$VM_NAME" --ostype "Linux_64" --register > /dev/null
     VBoxManage modifyvm "$VM_NAME" --cpus 2 --memory "$RAM" --vram 16
@@ -45,34 +45,34 @@ crear_vm() {
     VBoxManage modifyvm "$VM_NAME" --boot1 disk --boot2 dvd --boot3 none --boot4 none
 }
 
-# --- 5. CREAR Y ARRANCAR MÁQUINAS ---
-crear_vm "$CP_NAME" 2048
+# --- 5. CREATE AND START VMS ---
+create_vm "$CP_NAME" 2048
 
-# Bucle para crear tantos workers como indique la variable
+# Loop to create as many workers as indicated
 if [ "$WORKER_COUNT" -gt 0 ]; then
     for i in $(seq 1 $WORKER_COUNT); do
-        crear_vm "${WORKER_BASE_NAME}-${i}" 2048
+        create_vm "${WORKER_BASE_NAME}-${i}" 2048
     done
 fi
 
-echo "Arrancando las máquinas..."
-VBoxManage startvm "$CP_NAME" --type headless > /dev/null 2>&1 || echo "   $CP_NAME ya estaba encendida."
+echo "Starting VMs..."
+VBoxManage startvm "$CP_NAME" --type headless > /dev/null 2>&1 || echo "   $CP_NAME was already running."
 
 if [ "$WORKER_COUNT" -gt 0 ]; then
     for i in $(seq 1 $WORKER_COUNT); do
-        VBoxManage startvm "${WORKER_BASE_NAME}-${i}" --type headless > /dev/null 2>&1 || echo "   ${WORKER_BASE_NAME}-${i} ya estaba encendido."
+        VBoxManage startvm "${WORKER_BASE_NAME}-${i}" --type headless > /dev/null 2>&1 || echo "   ${WORKER_BASE_NAME}-${i} was already running."
     done
 fi
 
-# --- 6. INTRODUCIR IPs ---
+# --- 6. ENTER IPs ---
 > cluster-ips.env
 
-read -p "Introduce la IP de $CP_NAME: " CP_IP
+read -p "Enter IP for $CP_NAME: " CP_IP
 echo "CP_IP=\"$CP_IP\"" >> cluster-ips.env
 
 if [ "$WORKER_COUNT" -gt 0 ]; then
     for i in $(seq 1 $WORKER_COUNT); do
-        read -p "Introduce la IP de ${WORKER_BASE_NAME}-${i}: " WORKER_IP
+        read -p "Enter IP for ${WORKER_BASE_NAME}-${i}: " WORKER_IP
         echo "WORKER_IP_${i}=\"$WORKER_IP\"" >> cluster-ips.env
     done
 fi
@@ -80,17 +80,17 @@ fi
 source cluster-ips.env
 
 echo "---------------------------------------------------"
-echo "IPs guardadas correctamente en 'cluster-ips.env'."
-echo "Fase 1 completada. Máquinas listas para recibir configuración."
+echo "IPs successfully saved in 'cluster-ips.env'."
+echo "Phase 1 completed. VMs are ready for configuration."
 
-# --- 7. GENERAR CONFIGURACIÓN ---
+# --- 7. GENERATE CONFIGURATION ---
 echo "---------------------------------------------------"
-echo "Generando archivos de configuración de Talos..."
+echo "Generating Talos configuration files..."
 talosctl gen config "$CLUSTER_NAME" "https://${CP_IP}:6443" --force
 
-# --- 8. APLICAR CONFIGURACIÓN ---
+# --- 8. APPLY CONFIGURATION ---
 echo "---------------------------------------------------"
-echo "Inyectando configuración en el Control Plane ($CP_IP)..."
+echo "Injecting configuration into Control Plane ($CP_IP)..."
 talosctl apply-config --nodes "$CP_IP" --file controlplane.yaml --insecure
 
 if [ "$WORKER_COUNT" -gt 0 ]; then
@@ -98,19 +98,19 @@ if [ "$WORKER_COUNT" -gt 0 ]; then
         var_name="WORKER_IP_${i}"
         W_IP="${!var_name}"
         
-        echo "Inyectando configuración en el Worker ($W_IP)..."
+        echo "Injecting configuration into Worker ($W_IP)..."
         talosctl apply-config --nodes "$W_IP" --file worker.yaml --insecure
     done
 fi
 
-# --- 9. CONFIGURAR CLIENTE LOCAL ---
+# --- 9. CONFIGURE LOCAL CLIENT ---
 export TALOSCONFIG=$(pwd)/talosconfig
 talosctl config endpoint "$CP_IP"
 talosctl config node "$CP_IP"
 
-# --- 10. ESPERA INTELIGENTE Y BOOTSTRAP ---
+# --- 10. SMART WAIT AND BOOTSTRAP ---
 echo "---------------------------------------------------"
-echo -n "Esperando a que el Control Plane se instale, reinicie y responda "
+echo -n "Waiting for Control Plane to install, reboot, and respond "
 
 until timeout 3 talosctl kubeconfig . --nodes "$CP_IP" --endpoints "$CP_IP" --force > /dev/null 2>&1; do
     sleep 5
@@ -118,47 +118,47 @@ until timeout 3 talosctl kubeconfig . --nodes "$CP_IP" --endpoints "$CP_IP" --fo
 done
 
 echo ""
-echo "Control Plane activo"
-echo "Iniciando el Bootstrap (etcd)..."
+echo "Control Plane is active"
+echo "Starting Bootstrap (etcd)..."
 talosctl bootstrap
 
-# --- 11. OBTENER KUBECONFIG ---
+# --- 11. GET KUBECONFIG ---
 echo "---------------------------------------------------"
-echo -n "Configurando kubeconfig localmente"
-# Este bucle intenta descargar el archivo cada 5 segundos hasta que lo logra
+echo -n "Configuring local kubeconfig"
+# This loop attempts to download the file every 5 seconds until successful
 until talosctl kubeconfig . --force &> /dev/null; do
     sleep 5
     echo -n "."
 done
 
-# --- 12. ESPERAR A QUE EL CLÚSTER ESTÉ READY ---
+# --- 12. WAIT FOR CLUSTER TO BE READY ---
 echo "---------------------------------------------------"
-echo -n "Esperando a que la API de Kubernetes responda "
+echo -n "Waiting for Kubernetes API to respond "
 until kubectl get nodes --kubeconfig=./kubeconfig > /dev/null 2>&1; do
     sleep 5
 done
 echo ""
 
-echo "Esperando a que la red y los DNS arranquen..."
+echo "Waiting for network and DNS to start..."
 kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s --kubeconfig=./kubeconfig
 
-echo "¡Todos los servicios internos están corriendo! El clúster está operativo."
+echo "All internal services are running! Cluster is operational."
 
-# --- 13. DESPLEGAR Y PROBAR NGINX ---
+# --- 13. DEPLOY AND TEST NGINX ---
 echo "---------------------------------------------------"
-echo "Desplegando aplicación Nginx de prueba..."
+echo "Deploying test Nginx application..."
 kubectl apply -f ../manifests/nginx-demo.yaml --kubeconfig=./kubeconfig
 
-echo "Esperando a que los contenedores de Nginx estén listos..."
+echo "Waiting for Nginx containers to be ready..."
 kubectl rollout status deployment/nginx-demo --kubeconfig=./kubeconfig
 
 echo "---------------------------------------------------"
-echo "Probando la conexión HTTP hacia el Nginx..."
-echo "Haciendo petición a http://${CP_IP}:30080"
+echo "Testing HTTP connection to Nginx..."
+echo "Making request to http://${CP_IP}:30080"
 echo ""
 
 curl -s "http://${CP_IP}:30080" | head -n 15
 
 echo ""
 echo "---------------------------------------------------"
-echo "AUTOMATIZACIÓN COMPLETADA CON ÉXITO"
+echo "AUTOMATION COMPLETED SUCCESSFULLY"
