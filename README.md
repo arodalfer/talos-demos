@@ -22,7 +22,33 @@ Before running the scripts, ensure you have the following tools installed on you
 3. **Kernel module `br_netfilter` (Linux only)**: Essential for Kubernetes CNI (Container Network Interface) to correctly route bridged network traffic. Ensure you load it on your host machine by running:
 ```bash
    sudo modprobe br_netfilter
+```
 
 **Depending on the environment you choose:**
 * For the Docker script: **Docker Desktop** or **Docker Engine** running.
 * For the VirtualBox script: **VirtualBox** installed and the command line tools (`VBoxManage`) accessible in your PATH.
+
+## Option A: Deployment with Docker 
+This is the fastest and lightest way to try Talos. It uses Docker containers on your local machine to simulate the cluster nodes. You don't have to configure anything at all. Just run the script and in a couple of minutes you'll have the cluster up and running and Nginx deployed:
+```bash
+   cd scripts
+   ./start-cluster-docker.sh
+```
+## Option B: Deployment with VirtualBox 
+This demo is more advanced and simulates a real environment by creating virtual machines that connect directly to your local network. Before running the script, you must configure the cluster.env file located in the scripts/ folder. This file controls how your machines will be created:
+```bash
+   # === cluster.env ===
+
+   # Talos version
+   TALOS_VERSION="v1.12.0"
+
+   # Physical network interface for VirtualBox machines
+   BRIDGE_IF="xxxxx"
+
+   # Machine names
+   CP_NAME="talos-master"
+   WORKER_BASE_NAME="talos-worker"
+
+   # Number of workers
+   WORKER_COUNT=1
+```
