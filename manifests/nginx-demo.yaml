@@ -20,7 +20,7 @@ data:
     <body>
       <div class="container">
         <h1>¡Nginx Desplegado con Éxito!</h1>
-        <p>Si estás viendo esto, significa que tu clúster de <span class="success">Talos Linux</span> está funcionando correctamente.</p>
+        <p>If you are seeing this, it means that your cluster <span class="success">Talos Linux</span> is running correctly.</p>
       </div>
     </body>
     </html>

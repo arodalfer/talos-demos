@@ -1,68 +1,67 @@
 #!/bin/bash
 
-echo "Limpieza total del entorno Talos..."
+echo "Full cleanup of the Talos environment..."
 
-# --- 1. LIMPIEZA DE DOCKER ---
-echo "1. Limpiando clúster de Docker..."
+# --- 1. CLEAN DOCKER ---
+echo "1. Cleaning Docker cluster..."
 CLUSTER_DOCKER="talos-docker-demo"
 
 if command -v talosctl &> /dev/null; then
     if talosctl cluster destroy --name "$CLUSTER_DOCKER" > /dev/null 2>&1; then
-        echo "Clúster '$CLUSTER_DOCKER' eliminado."
+        echo "Cluster '$CLUSTER_DOCKER' removed."
     else
-        echo "No se encontró el clúster '$CLUSTER_DOCKER' (o ya estaba borrado)."
+        echo "Cluster '$CLUSTER_DOCKER' not found (or already deleted)."
     fi
 else
-    echo "talosctl no instalado. Omitiendo limpieza de Docker."
+    echo "talosctl not installed. Skipping Docker cleanup."
 fi
 
-# --- 2. LIMPIEZA DE VIRTUALBOX ---
+# --- 2. CLEAN VIRTUALBOX ---
 echo ""
-echo "2. Limpiando máquinas de VirtualBox..."
+echo "2. Cleaning VirtualBox VMs..."
 CONFIG_FILE="cluster.env"
 
 if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
     
-    borrar_vm() {
+    delete_vm() {
         local VM_NAME="$1"
         if VBoxManage showvminfo "$VM_NAME" &> /dev/null; then
-            echo "   Apagando y eliminando: $VM_NAME..."
+            echo "   Powering off and deleting: $VM_NAME..."
             VBoxManage controlvm "$VM_NAME" poweroff > /dev/null 2>&1
             sleep 2
             VBoxManage unregistervm "$VM_NAME" --delete > /dev/null 2>&1
-            echo "$VM_NAME eliminada."
+            echo "$VM_NAME deleted."
         fi
     }
 
-    # Borrar Control Plane
-    borrar_vm "$CP_NAME"
+    # Delete Control Plane
+    delete_vm "$CP_NAME"
     
-    # Borrar Workers
+    # Delete Workers
     if [ "$WORKER_COUNT" -gt 0 ]; then
         for i in $(seq 1 $WORKER_COUNT); do
-            borrar_vm "${WORKER_BASE_NAME}-${i}"
+            delete_vm "${WORKER_BASE_NAME}-${i}"
         done
     fi
 else
-    echo "No se encontró '$CONFIG_FILE'. Omitiendo limpieza de VirtualBox."
+    echo "'$CONFIG_FILE' not found. Skipping VirtualBox cleanup."
 fi
 
-# --- 3. LIMPIEZA DE ARCHIVOS LOCALES ---
+# --- 3. CLEAN LOCAL FILES ---
 echo ""
-echo "3. Limpiando archivos de configuración locales..."
+echo "3. Cleaning local configuration files..."
 rm -f kubeconfig talosconfig cluster-ips.env controlplane.yaml worker.yaml
 
-# Preguntar si se quiere borrar la ISO para liberar 1.2GB de espacio
 if ls *.iso 1> /dev/null 2>&1; then
     echo ""
-    read -p "¿Quieres borrar la ISO descargada? (s/N): " BORRAR_ISO
-    if [[ "$BORRAR_ISO" == "s" || "$BORRAR_ISO" == "S" ]]; then
+    read -p "Do you want to delete the downloaded ISO? (y/N): " DELETE_ISO
+    if [[ "$DELETE_ISO" == "y" || "$DELETE_ISO" == "Y" ]]; then
         rm -f *.iso
-        echo "ISO eliminada."
+        echo "ISO deleted."
     else
-        echo "ISO conservada para futuros despliegues."
+        echo "ISO kept for future deployments."
     fi
 fi
 
-echo "Entorno completamente limpio"
+echo "Environment fully cleaned"
